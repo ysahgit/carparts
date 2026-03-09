@@ -1,0 +1,4 @@
+node_modules/
+bmw_parts.db
+.env
+dist/
