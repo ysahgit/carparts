@@ -1,6 +1,9 @@
 {
   "name": "bmw-parts-shop",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "concurrently \"npm run api\" \"npm run ui\"",
     "api": "cd backend && npm start",
