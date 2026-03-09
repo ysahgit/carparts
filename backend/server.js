@@ -31,16 +31,19 @@ function query(sql, params = []) {
   return rows;
 }
 
-app.get('/api/brands', (req, res) => {
-  res.json(query('SELECT id, name FROM brands ORDER BY name'));
-});
+app.get('/api/brands', (req, res) =>
+  res.json(query('SELECT id, name FROM brands ORDER BY name')));
+
+app.get('/api/categories', (req, res) =>
+  res.json(query('SELECT id, name FROM categories ORDER BY name')));
 
 app.get('/api/models', (req, res) => {
   const { brand_id } = req.query;
-  const sql = brand_id
-    ? 'SELECT id, name FROM models WHERE brand_id = ? ORDER BY name'
-    : 'SELECT id, name FROM models ORDER BY name';
-  res.json(query(sql, brand_id ? [brand_id] : []));
+  res.json(query(
+    brand_id ? 'SELECT id, name FROM models WHERE brand_id = ? ORDER BY name'
+             : 'SELECT id, name FROM models ORDER BY name',
+    brand_id ? [brand_id] : []
+  ));
 });
 
 app.get('/api/years', (req, res) => {
@@ -54,11 +57,9 @@ app.get('/api/years', (req, res) => {
 app.get('/api/variants', (req, res) => {
   const { model_id, year } = req.query;
   res.json(query(`
-    SELECT v.id, v.name, v.engine
-    FROM variants v
+    SELECT v.id, v.name, v.engine FROM variants v
     JOIN years y ON y.id = v.year_id
-    WHERE y.model_id = ? AND y.year = ?
-    ORDER BY v.name
+    WHERE y.model_id = ? AND y.year = ? ORDER BY v.name
   `, [model_id, year]));
 });
 
@@ -67,59 +68,36 @@ app.get('/api/parts', (req, res) => {
   let sql = `
     SELECT p.id, p.name, p.part_number, p.price, p.stock, p.brand, p.notes,
            c.name AS category
-    FROM parts p
-    JOIN categories c ON c.id = p.category_id
+    FROM parts p JOIN categories c ON c.id = p.category_id
     WHERE p.variant_id = ?
   `;
   const params = [variant_id];
-  if (category) { sql += ' AND c.name = ?'; params.push(category); }
-  sql += ' ORDER BY p.name';
+  if (category && category !== 'All') { sql += ' AND c.name = ?'; params.push(category); }
+  sql += ' ORDER BY c.name, p.name';
   res.json(query(sql, params));
 });
 
-// ── GET /api/search?q= ───────────────────────────────────────────────────────
-// Searches across: part name, part number, parts brand, car model name
 app.get('/api/search', (req, res) => {
   const { q, limit = 12 } = req.query;
   if (!q || q.trim().length < 2) return res.json([]);
   const like = `%${q.trim()}%`;
   res.json(query(`
-    SELECT
-      p.id, p.name AS part_name, p.part_number, p.price, p.stock,
-      p.brand AS supplier,
-      b.name  AS car_brand,
-      m.name  AS car_model,
-      y.year,
-      v.name  AS variant,
-      v.engine,
-      c.name  AS category
+    SELECT p.id, p.name AS part_name, p.part_number, p.price, p.stock,
+           p.brand AS supplier, b.name AS car_brand, m.name AS car_model,
+           y.year, v.name AS variant, v.engine, c.name AS category
     FROM parts p
-    JOIN variants  v ON v.id = p.variant_id
-    JOIN years     y ON y.id = v.year_id
-    JOIN models    m ON m.id = y.model_id
-    JOIN brands    b ON b.id = m.brand_id
+    JOIN variants v ON v.id = p.variant_id JOIN years y ON y.id = v.year_id
+    JOIN models m ON m.id = y.model_id JOIN brands b ON b.id = m.brand_id
     JOIN categories c ON c.id = p.category_id
-    WHERE
-      p.name        LIKE ? OR
-      p.part_number LIKE ? OR
-      p.brand       LIKE ? OR
-      m.name        LIKE ?
+    WHERE p.name LIKE ? OR p.part_number LIKE ? OR p.brand LIKE ? OR m.name LIKE ?
     GROUP BY p.part_number, m.name, v.name, y.year
-    ORDER BY
-      CASE WHEN p.part_number LIKE ? THEN 0
-           WHEN p.name        LIKE ? THEN 1
-           ELSE 2 END,
-      p.name
+    ORDER BY CASE WHEN p.part_number LIKE ? THEN 0 WHEN p.name LIKE ? THEN 1 ELSE 2 END, p.name
     LIMIT ?
   `, [like, like, like, like, like, like, parseInt(limit)]));
 });
 
-// Catch-all: serve React app
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
-});
+app.get('*', (req, res) =>
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html')));
 
 const PORT = process.env.PORT || 3001;
-loadDb().then(() => app.listen(PORT, () =>
-  console.log(`Server running on port ${PORT}`)
-));
+loadDb().then(() => app.listen(PORT, () => console.log(`Server running on port ${PORT}`)));
