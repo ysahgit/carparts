@@ -6,7 +6,7 @@ const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, 'bmw_parts.db');
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'bmw_parts.db');
 
 async function run(SQL) {
   if (!SQL) SQL = await initSqlJs();

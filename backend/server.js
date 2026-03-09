@@ -10,7 +10,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
-const DB_PATH = path.join(__dirname, 'bmw_parts.db');
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'bmw_parts.db');
 
 let db;
 let sqlJs;
