@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 
-const API = "http://localhost:3001/api";
+// In production API calls go to same origin, in dev Vite proxies to :3001
+const API = "/api";
 
 const brandColors = {
   BMW:        "#0066CC",
@@ -25,11 +26,8 @@ const Select = ({ label, value, onChange, options, placeholder, disabled }) => (
         cursor: disabled || options.length===0 ? "not-allowed" : "pointer",
         appearance:"none",
         backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
-        backgroundRepeat:"no-repeat",
-        backgroundPosition:"right 12px center",
-        paddingRight:32,
-        transition:"border-color 0.15s",
-        outline:"none",
+        backgroundRepeat:"no-repeat", backgroundPosition:"right 12px center",
+        paddingRight:32, transition:"border-color 0.15s", outline:"none",
       }}
     >
       <option value="" disabled>{options.length === 0 ? "—" : placeholder}</option>
@@ -119,26 +117,11 @@ export default function App() {
       .then(data => { setParts(data); setLoading(false); });
   }, [variant]);
 
-  const handleBrand = (val) => {
-    const b = brands.find(x => x.id === parseInt(val));
-    setBrand(b || null);
-  };
-  const handleModel = (val) => {
-    const m = models.find(x => x.id === parseInt(val));
-    setModel(m || null);
-  };
-  const handleYear = (val) => setYear(parseInt(val));
-  const handleVariant = (val) => {
-    const v = variants.find(x => x.id === parseInt(val));
-    setVariant(v || null);
-  };
-
   const filtered = search.trim()
     ? parts.filter(p =>
         p.name.toLowerCase().includes(search.toLowerCase()) ||
         p.part_number.toLowerCase().includes(search.toLowerCase()) ||
-        p.brand.toLowerCase().includes(search.toLowerCase())
-      )
+        p.brand.toLowerCase().includes(search.toLowerCase()))
     : parts;
 
   const addToCart = (part) => {
@@ -158,12 +141,16 @@ export default function App() {
 
   const accentColor = brand ? (brandColors[brand.name] || "#3b82f6") : "#3b82f6";
 
+  const handleBrand   = val => setBrand(brands.find(x => x.id === parseInt(val)) || null);
+  const handleModel   = val => setModel(models.find(x => x.id === parseInt(val)) || null);
+  const handleYear    = val => setYear(parseInt(val));
+  const handleVariant = val => setVariant(variants.find(x => x.id === parseInt(val)) || null);
+
   return (
     <div style={{ minHeight:"100vh", background:"#020617",
       fontFamily:"'Inter',sans-serif", padding:"0 0 60px" }}>
       <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
 
-      {/* Header */}
       <div style={{ background:"linear-gradient(135deg,#0f172a 0%,#1e1b4b 100%)",
         borderBottom:"1px solid #1e293b", padding:"20px 32px",
         display:"flex", alignItems:"center", justifyContent:"space-between" }}>
@@ -172,8 +159,7 @@ export default function App() {
             fontFamily:"'Barlow Condensed',sans-serif", letterSpacing:2, textTransform:"uppercase" }}>
             <span style={{ color: accentColor }}>⬡</span> PartsFinder
           </div>
-          <div style={{ fontSize:11, color:"#64748b", letterSpacing:2,
-            textTransform:"uppercase", marginTop:2 }}>
+          <div style={{ fontSize:11, color:"#64748b", letterSpacing:2, textTransform:"uppercase", marginTop:2 }}>
             {brand ? `${brand.name} Brake Parts` : "Multi-Brand Brake Parts Specialist"}
           </div>
         </div>
@@ -187,7 +173,6 @@ export default function App() {
 
       <div style={{ maxWidth:900, margin:"0 auto", padding:"32px 24px" }}>
 
-        {/* Selector row */}
         <div style={{ background:"#0f172a", borderRadius:14, border:"1px solid #1e293b",
           padding:"24px", marginBottom:24 }}>
           <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:13, fontWeight:700,
@@ -195,41 +180,20 @@ export default function App() {
             Find Parts For Your Vehicle
           </div>
           <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
-            <Select
-              label="Brand"
-              value={brand?.id}
-              onChange={handleBrand}
-              placeholder="Select brand..."
-              options={brands.map(b => ({ value: b.id, label: b.name }))}
-            />
-            <Select
-              label="Model"
-              value={model?.id}
-              onChange={handleModel}
-              placeholder="Select model..."
-              disabled={!brand}
-              options={models.map(m => ({ value: m.id, label: m.name }))}
-            />
-            <Select
-              label="Year"
-              value={year}
-              onChange={handleYear}
-              placeholder="Select year..."
-              disabled={!model}
-              options={years.map(y => ({ value: y, label: y }))}
-            />
-            <Select
-              label="Variant / Engine"
-              value={variant?.id}
-              onChange={handleVariant}
-              placeholder="Select variant..."
-              disabled={!year}
-              options={variants.map(v => ({ value: v.id, label: `${v.name} — ${v.engine}` }))}
-            />
+            <Select label="Brand"          value={brand?.id}    onChange={handleBrand}
+              placeholder="Select brand..."   options={brands.map(b=>({value:b.id,label:b.name}))} />
+            <Select label="Model"          value={model?.id}    onChange={handleModel}
+              placeholder="Select model..."   disabled={!brand}
+              options={models.map(m=>({value:m.id,label:m.name}))} />
+            <Select label="Year"           value={year}         onChange={handleYear}
+              placeholder="Select year..."    disabled={!model}
+              options={years.map(y=>({value:y,label:y}))} />
+            <Select label="Variant / Engine" value={variant?.id} onChange={handleVariant}
+              placeholder="Select variant..." disabled={!year}
+              options={variants.map(v=>({value:v.id,label:`${v.name} — ${v.engine}`}))} />
           </div>
         </div>
 
-        {/* Vehicle summary bar */}
         {variant && (
           <div style={{ background:"#1e293b", borderRadius:10, padding:"12px 20px",
             marginBottom:20, display:"flex", gap:24, flexWrap:"wrap",
@@ -244,25 +208,19 @@ export default function App() {
           </div>
         )}
 
-        {/* Parts list */}
         {variant && (
           <div style={{ background:"#0f172a", borderRadius:14, border:"1px solid #1e293b", overflow:"hidden" }}>
             <div style={{ padding:"16px 20px", background:"#1e293b",
               display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
               <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:15, fontWeight:700,
-                color:"#f1f5f9", letterSpacing:1, textTransform:"uppercase" }}>
-                Brake Parts
-              </span>
+                color:"#f1f5f9", letterSpacing:1, textTransform:"uppercase" }}>Brake Parts</span>
               <input value={search} onChange={e => setSearch(e.target.value)}
                 placeholder="Filter by name, part number or brand..."
                 style={{ padding:"8px 14px", borderRadius:8, border:"1px solid #334155",
                   background:"#0f172a", color:"#f1f5f9", fontSize:13, width:280, outline:"none" }} />
             </div>
-
             <div style={{ padding:16, display:"flex", flexDirection:"column", gap:8 }}>
-              {loading && (
-                <div style={{color:"#64748b", padding:20, textAlign:"center"}}>Loading parts...</div>
-              )}
+              {loading && <div style={{color:"#64748b",padding:20,textAlign:"center"}}>Loading parts...</div>}
               {filtered.map((p, i) => (
                 <div key={i} style={{
                   background:"#1e293b", borderRadius:10, padding:"14px 18px",
@@ -284,10 +242,9 @@ export default function App() {
                       background: p.stock>10?"#052e16":p.stock>3?"#1c1917":"#2d0000",
                       color: p.stock>10?"#34d399":p.stock>3?"#fbbf24":"#f87171",
                     }}>
-                      {p.stock>10 ? "In Stock" : p.stock>3 ? `Low (${p.stock})` : `Last ${p.stock}`}
+                      {p.stock>10?"In Stock":p.stock>3?`Low (${p.stock})`:`Last ${p.stock}`}
                     </div>
-                    <div style={{ fontSize:18, fontWeight:800, color:"#34d399",
-                      minWidth:70, textAlign:"right" }}>
+                    <div style={{ fontSize:18, fontWeight:800, color:"#34d399", minWidth:70, textAlign:"right" }}>
                       €{Number(p.price).toFixed(2)}
                     </div>
                     <button onClick={() => addToCart(p)} style={{
@@ -302,20 +259,17 @@ export default function App() {
                 </div>
               ))}
               {!loading && filtered.length===0 && parts.length>0 && (
-                <div style={{color:"#64748b", padding:20, textAlign:"center"}}>
-                  No parts match your filter.
-                </div>
+                <div style={{color:"#64748b",padding:20,textAlign:"center"}}>No parts match your filter.</div>
               )}
             </div>
           </div>
         )}
 
-        {/* Empty state */}
-        {!variant && !loading && (
+        {!variant && (
           <div style={{ textAlign:"center", padding:"60px 20px", color:"#334155" }}>
             <div style={{ fontSize:48, marginBottom:16 }}>🔧</div>
-            <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:20,
-              fontWeight:700, letterSpacing:1, textTransform:"uppercase", color:"#475569" }}>
+            <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:20, fontWeight:700,
+              letterSpacing:1, textTransform:"uppercase", color:"#475569" }}>
               Select your vehicle above to find parts
             </div>
           </div>

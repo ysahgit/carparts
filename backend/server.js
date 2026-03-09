@@ -7,16 +7,20 @@ const path = require('path');
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 let db;
 
 async function loadDb() {
   const SQL = await initSqlJs();
   const dbPath = path.join(__dirname, 'bmw_parts.db');
+
+  // Auto-seed if DB doesn't exist
   if (!fs.existsSync(dbPath)) {
-    console.error('bmw_parts.db not found — run: node seed.js');
-    process.exit(1);
+    console.log('No database found — seeding...');
+    await require('./seed').run(SQL);
   }
+
   db = new SQL.Database(fs.readFileSync(dbPath));
   console.log('Database loaded OK');
 }
@@ -30,12 +34,10 @@ function query(sql, params = []) {
   return rows;
 }
 
-// ── GET /api/brands ──────────────────────────────────────────────────────────
 app.get('/api/brands', (req, res) => {
   res.json(query('SELECT id, name FROM brands ORDER BY name'));
 });
 
-// ── GET /api/models?brand_id= ────────────────────────────────────────────────
 app.get('/api/models', (req, res) => {
   const { brand_id } = req.query;
   const sql = brand_id
@@ -44,7 +46,6 @@ app.get('/api/models', (req, res) => {
   res.json(query(sql, brand_id ? [brand_id] : []));
 });
 
-// ── GET /api/years?model_id= ─────────────────────────────────────────────────
 app.get('/api/years', (req, res) => {
   const { model_id } = req.query;
   const rows = query(
@@ -54,7 +55,6 @@ app.get('/api/years', (req, res) => {
   res.json(rows.map(r => r.year));
 });
 
-// ── GET /api/variants?model_id=&year= ────────────────────────────────────────
 app.get('/api/variants', (req, res) => {
   const { model_id, year } = req.query;
   res.json(query(`
@@ -66,7 +66,6 @@ app.get('/api/variants', (req, res) => {
   `, [model_id, year]));
 });
 
-// ── GET /api/parts?variant_id=&category= ────────────────────────────────────
 app.get('/api/parts', (req, res) => {
   const { variant_id, category } = req.query;
   let sql = `
@@ -82,7 +81,6 @@ app.get('/api/parts', (req, res) => {
   res.json(query(sql, params));
 });
 
-// ── GET /api/search?q= ───────────────────────────────────────────────────────
 app.get('/api/search', (req, res) => {
   const { q } = req.query;
   res.json(query(`
@@ -98,7 +96,12 @@ app.get('/api/search', (req, res) => {
   `, [`%${q}%`, `%${q}%`]));
 });
 
+// Catch-all: serve React frontend
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+});
+
 const PORT = process.env.PORT || 3001;
 loadDb().then(() => app.listen(PORT, () =>
-  console.log(`API running on http://localhost:${PORT}`)
+  console.log(`Server running on port ${PORT}`)
 ));
