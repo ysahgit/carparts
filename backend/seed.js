@@ -68,7 +68,7 @@ async function run(SQL) {
 
     // 1 — BRAKES
     Brakes: (brandName, vname, slug) => {
-      const base = { BMW:{318i:19,320i:22,330i:28,M340i:68,520i:24,530i:30,540i:44,'M550i':95,'xDrive20i':26,'xDrive30i':32,'M40i':72,'116i':17,'118i':17,'120i':21,'M135i':62}, Audi:{'30 TFSI':18,'35 TFSI':22,'40 TFSI':27,S3:58,'45 TFSI':30,S4:75,'40 TDI':25,'55 TFSI':48,SQ5:82,S6:88}, Volkswagen:{'1.0 TSI':15,'1.5 TSI':18,'2.0 TDI':20,GTI:45,'2.0 TSI':24,GTE:28,'2.0 TSI 4Motion':28,R:55,'1.0 MPI':14}, Toyota:{'1.2T':16,'1.8 Hybrid':20,'2.0 GR Sport':26,'GR Corolla':55,'2.0 AWD-i':22,'2.5 Hybrid':24,'2.5 PHEV':28,'2.5 AWD':24,'1.0 VVT-i':13,'1.5 VVT-i':16,'1.5 Hybrid':18,'GR Yaris':52,'1.8 Hybrid':19,'2.0 Hybrid':22,'2.0 GR Sport Hybrid':30} };
+      const base = { BMW:{'318i':19,'320i':22,'330i':28,'M340i':68,'520i':24,'530i':30,'540i':44,'M550i':95,'xDrive20i':26,'xDrive30i':32,'M40i':72,'116i':17,'118i':17,'120i':21,'M135i':62}, Audi:{'30 TFSI':18,'35 TFSI':22,'40 TFSI':27,'S3':58,'45 TFSI':30,'S4':75,'40 TDI':25,'55 TFSI':48,'SQ5':82,'S6':88}, Volkswagen:{'1.0 TSI':15,'1.5 TSI':18,'2.0 TDI':20,'GTI':45,'2.0 TSI':24,'GTE':28,'2.0 TSI 4Motion':28,'R':55,'1.0 MPI':14}, Toyota:{'1.2T':16,'1.8 Hybrid':20,'2.0 GR Sport':26,'GR Corolla':55,'2.0 AWD-i':22,'2.5 Hybrid':24,'2.5 PHEV':28,'2.5 AWD':24,'1.0 VVT-i':13,'1.5 VVT-i':16,'1.5 Hybrid':18,'GR Yaris':52,'2.0 Hybrid':22,'2.0 GR Sport Hybrid':30} };
       const suppliers = { BMW:['Bosch','Brembo','ATE','TRW'], Audi:['TRW','Brembo','Zimmermann','Ate'], Volkswagen:['Valeo','EBC','Textar','TRW'], Toyota:['Nisshinbo','Endless','Disco','Aisin'] };
       const fp = (base[brandName]||{})[vname] || 22;
       const sup = suppliers[brandName];
