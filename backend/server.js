@@ -1,81 +1,104 @@
 const express = require('express');
 const cors = require('cors');
-const Database = require('better-sqlite3');
+const initSqlJs = require('sql.js');
+const fs = require('fs');
 const path = require('path');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const db = new Database(path.join(__dirname, 'bmw_parts.db'));
+let db;
 
-// ── GET /api/models ──────────────────────────────────────────────────────────
+async function loadDb() {
+  const SQL = await initSqlJs();
+  const dbPath = path.join(__dirname, 'bmw_parts.db');
+  if (!fs.existsSync(dbPath)) {
+    console.error('bmw_parts.db not found — run: node seed.js');
+    process.exit(1);
+  }
+  db = new SQL.Database(fs.readFileSync(dbPath));
+  console.log('Database loaded OK');
+}
+
+function query(sql, params = []) {
+  const stmt = db.prepare(sql);
+  stmt.bind(params);
+  const rows = [];
+  while (stmt.step()) rows.push(stmt.getAsObject());
+  stmt.free();
+  return rows;
+}
+
+// ── GET /api/brands ──────────────────────────────────────────────────────────
+app.get('/api/brands', (req, res) => {
+  res.json(query('SELECT id, name FROM brands ORDER BY name'));
+});
+
+// ── GET /api/models?brand_id= ────────────────────────────────────────────────
 app.get('/api/models', (req, res) => {
-  const rows = db.prepare(`
-    SELECT m.id, m.name
-    FROM models m
-    JOIN brands b ON b.id = m.brand_id
-    WHERE b.name = 'BMW'
-    ORDER BY m.name
-  `).all();
-  res.json(rows);
+  const { brand_id } = req.query;
+  const sql = brand_id
+    ? 'SELECT id, name FROM models WHERE brand_id = ? ORDER BY name'
+    : 'SELECT id, name FROM models ORDER BY name';
+  res.json(query(sql, brand_id ? [brand_id] : []));
 });
 
 // ── GET /api/years?model_id= ─────────────────────────────────────────────────
 app.get('/api/years', (req, res) => {
   const { model_id } = req.query;
-  const rows = db.prepare(`
-    SELECT DISTINCT year FROM years
-    WHERE model_id = ?
-    ORDER BY year DESC
-  `).all(model_id);
+  const rows = query(
+    'SELECT DISTINCT year FROM years WHERE model_id = ? ORDER BY year DESC',
+    [model_id]
+  );
   res.json(rows.map(r => r.year));
 });
 
 // ── GET /api/variants?model_id=&year= ────────────────────────────────────────
 app.get('/api/variants', (req, res) => {
   const { model_id, year } = req.query;
-  const rows = db.prepare(`
+  res.json(query(`
     SELECT v.id, v.name, v.engine
     FROM variants v
     JOIN years y ON y.id = v.year_id
     WHERE y.model_id = ? AND y.year = ?
     ORDER BY v.name
-  `).all(model_id, year);
-  res.json(rows);
+  `, [model_id, year]));
 });
 
-// ── GET /api/parts?variant_id=&category=Brakes ───────────────────────────────
+// ── GET /api/parts?variant_id=&category= ────────────────────────────────────
 app.get('/api/parts', (req, res) => {
   const { variant_id, category } = req.query;
-  const rows = db.prepare(`
+  let sql = `
     SELECT p.id, p.name, p.part_number, p.price, p.stock, p.brand, p.notes,
            c.name AS category
     FROM parts p
     JOIN categories c ON c.id = p.category_id
-    JOIN variants v   ON v.id = p.variant_id
     WHERE p.variant_id = ?
-    ${category ? "AND c.name = ?" : ""}
-    ORDER BY c.name, p.name
-  `).all(...(category ? [variant_id, category] : [variant_id]));
-  res.json(rows);
+  `;
+  const params = [variant_id];
+  if (category) { sql += ' AND c.name = ?'; params.push(category); }
+  sql += ' ORDER BY p.name';
+  res.json(query(sql, params));
 });
 
 // ── GET /api/search?q= ───────────────────────────────────────────────────────
 app.get('/api/search', (req, res) => {
   const { q } = req.query;
-  const rows = db.prepare(`
+  res.json(query(`
     SELECT p.id, p.name, p.part_number, p.price, p.stock, p.brand,
-           m.name AS model, y.year, v.name AS variant
+           b.name AS brand_name, m.name AS model, y.year, v.name AS variant
     FROM parts p
     JOIN variants v ON v.id = p.variant_id
     JOIN years    y ON y.id = v.year_id
     JOIN models   m ON m.id = y.model_id
+    JOIN brands   b ON b.id = m.brand_id
     WHERE p.name LIKE ? OR p.part_number LIKE ?
     LIMIT 50
-  `).all(`%${q}%`, `%${q}%`);
-  res.json(rows);
+  `, [`%${q}%`, `%${q}%`]));
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));
+loadDb().then(() => app.listen(PORT, () =>
+  console.log(`API running on http://localhost:${PORT}`)
+));

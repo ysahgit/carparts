@@ -1,4 +1,4 @@
 node_modules/
-bmw_parts.db
-.env
+backend/bmw_parts.db
 dist/
+.env

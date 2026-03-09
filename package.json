@@ -1,0 +1,12 @@
+{
+  "name": "bmw-parts-shop",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently \"npm run api\" \"npm run ui\"",
+    "api": "cd backend && npm start",
+    "ui": "cd frontend && npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
