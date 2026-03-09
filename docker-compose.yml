@@ -1,11 +1,33 @@
 services:
+
   app:
     build: .
-    ports:
-      - "3001:3001"
+    container_name: carparts_app
+    expose:
+      - "3001"
     volumes:
       - ./data:/app/data
     environment:
       - ADMIN_PASSWORD=admin123
       - DB_PATH=/app/data/parts.db
     restart: unless-stopped
+    networks:
+      - carparts_net
+
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: carparts_npm
+    ports:
+      - "80:80"       # HTTP (needed for Let's Encrypt verification)
+      - "443:443"     # HTTPS
+      - "81:81"       # NPM admin UI
+    volumes:
+      - ./npm/data:/data
+      - ./npm/letsencrypt:/etc/letsencrypt
+    restart: unless-stopped
+    networks:
+      - carparts_net
+
+networks:
+  carparts_net:
+    driver: bridge
