@@ -2,12 +2,14 @@ services:
 
   app:
     build: .
-    container_name: carparts
+    container_name: carparts_app
     ports:
       - "3001:3001"
     volumes:
       - /srv/dev-disk-by-uuid-be0483c1-b5c5-4e3f-a0f9-6253efe0bf1b/docker/appdata/carparts/data:/app/data
     environment:
+      - PUID=1000
+      - PGID=100
       - ADMIN_PASSWORD=yas123
       - DB_PATH=/app/data/parts.db
     restart: unless-stopped
