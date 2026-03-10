@@ -17,7 +17,7 @@ RUN apk add --no-cache su-exec
 
 WORKDIR /app/backend
 COPY backend/package*.json ./
-RUN npm install --omit=dev
+RUN npm install
 
 COPY backend/ ./
 COPY --from=frontend-build /app/frontend/dist ../frontend/dist
@@ -30,3 +30,6 @@ RUN chmod +x /entrypoint.sh
 EXPOSE 3001
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", "server.js"]
+
+
+
