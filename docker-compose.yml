@@ -3,13 +3,33 @@ services:
   app:
     build: .
     container_name: carparts_app
-    ports:
-      - "3001:3001"
+    expose:
+      - "3001"
     volumes:
       - /srv/dev-disk-by-uuid-be0483c1-b5c5-4e3f-a0f9-6253efe0bf1b/docker/appdata/carparts/data:/app/data
     environment:
       - PUID=1000
-      - PGID=100
-      - ADMIN_PASSWORD=yas123
+      - PGID=1000
+      - ADMIN_PASSWORD=admin123
       - DB_PATH=/app/data/parts.db
     restart: unless-stopped
+    networks:
+      - carparts_net
+
+  npm:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: carparts_npm
+    ports:
+      - "80:80"       # HTTP + Let's Encrypt verification
+      - "443:443"     # HTTPS
+      - "81:81"       # NPM admin UI
+    volumes:
+      - /srv/dev-disk-by-uuid-be0483c1-b5c5-4e3f-a0f9-6253efe0bf1b/docker/appdata/carparts/npm/data:/data
+      - /srv/dev-disk-by-uuid-be0483c1-b5c5-4e3f-a0f9-6253efe0bf1b/docker/appdata/carparts/npm/letsencrypt:/etc/letsencrypt
+    restart: unless-stopped
+    networks:
+      - carparts_net
+
+networks:
+  carparts_net:
+    driver: bridge
