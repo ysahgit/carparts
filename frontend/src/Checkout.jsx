@@ -1,7 +1,4 @@
 import { useState } from "react";
-import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
-
-const PAYPAL_CLIENT_ID = import.meta.env.VITE_PAYPAL_CLIENT_ID || "test";
 
 const Input = ({ label, value, onChange, required, placeholder, type="text" }) => (
   <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
@@ -27,6 +24,32 @@ export default function Checkout({ onSuccess, onBack }) {
   });
   const [error, setError] = useState("");
   const [orderRef, setOrderRef] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handlePlaceOrder = async () => {
+    setLoading(true); setError("");
+    const res = await fetch("/api/orders", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        customer,
+        items: cart.map(i => ({
+          part_number: i.part_number, name: i.name,
+          brand: i.brand, price: i.price, qty: i.qty
+        })),
+        paypal_id: "MANUAL",
+      })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setOrderRef(data.reference);
+      setStep(4);
+      sessionStorage.removeItem('checkout_cart');
+    } else {
+      setError("Order could not be saved. Please try again.");
+    }
+    setLoading(false);
+  };
 
   const total = cart.reduce((s,i) => s + i.price * i.qty, 0);
   const set = (k) => (v) => setCustomer(c => ({...c, [k]:v}));
@@ -42,30 +65,7 @@ export default function Checkout({ onSuccess, onBack }) {
     setError(""); return true;
   };
 
-  const handlePayPalApprove = async (data, actions) => {
-    const details = await actions.order.capture();
-    const res = await fetch("/api/orders", {
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({
-        customer,
-        items: cart.map(i => ({
-          part_number: i.part_number, name: i.name,
-          brand: i.brand, price: i.price, qty: i.qty
-        })),
-        paypal_id: details.id,
-      })
-    });
-    const data2 = await res.json();
-    if (data2.ok) {
-      setOrderRef(data2.reference);
-      setStep(4);
-      sessionStorage.removeItem('checkout_cart');
-      onSuccess && onSuccess();
-    } else {
-      setError("Order could not be saved. Please contact us.");
-    }
-  };
+
 
   return (
     <div style={{ minHeight:"100vh", background:"#020617", fontFamily:"'Inter',sans-serif",
@@ -196,12 +196,12 @@ export default function Checkout({ onSuccess, onBack }) {
           </div>
         )}
 
-        {/* Step 3 — PayPal payment */}
+        {/* Step 3 — Place order */}
         {step === 3 && (
           <div style={{ background:"#0f172a", borderRadius:14, border:"1px solid #1e293b", padding:28 }}>
             <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:18, fontWeight:700,
               color:"#f1f5f9", letterSpacing:1, textTransform:"uppercase", marginBottom:8 }}>
-              Payment
+              Confirm Order
             </div>
             <div style={{ color:"#64748b", fontSize:13, marginBottom:24 }}>
               Total to pay: <span style={{ color:"#34d399", fontWeight:700, fontSize:18 }}>€{total.toFixed(2)}</span>
@@ -209,24 +209,12 @@ export default function Checkout({ onSuccess, onBack }) {
 
             {error && <div style={{ color:"#f87171", fontSize:13, marginBottom:16 }}>{error}</div>}
 
-            <PayPalScriptProvider options={{
-              "client-id": PAYPAL_CLIENT_ID,
-              currency: "EUR",
-            }}>
-              <PayPalButtons
-                style={{ layout:"vertical", color:"gold", shape:"rect", label:"pay" }}
-                createOrder={(data, actions) => {
-                  return actions.order.create({
-                    purchase_units: [{
-                      amount: { value: total.toFixed(2), currency_code:"EUR" },
-                      description: `PartsFinder Order — ${cart.length} item${cart.length>1?"s":""}`,
-                    }]
-                  });
-                }}
-                onApprove={handlePayPalApprove}
-                onError={() => setError("Payment failed. Please try again.")}
-              />
-            </PayPalScriptProvider>
+            <button onClick={handlePlaceOrder} disabled={loading}
+              style={{ width:"100%", padding:"14px", borderRadius:8, border:"none",
+                background: loading?"#1e293b":"#2563eb", color: loading?"#475569":"#fff",
+                fontWeight:700, fontSize:15, cursor: loading?"not-allowed":"pointer" }}>
+              {loading ? "Placing Order..." : "✓ Place Order"}
+            </button>
 
             <button onClick={()=>setStep(2)} style={{ marginTop:16, background:"none",
               border:"none", color:"#64748b", cursor:"pointer", fontSize:12 }}>
