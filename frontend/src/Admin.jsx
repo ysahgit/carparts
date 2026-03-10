@@ -474,6 +474,7 @@ export default function Admin() {
     { id:"parts",   label:"📋 Parts" },
     { id:"add",     label:"➕ Add Part" },
     { id:"models",  label:"🚗 Models & Variants" },
+    { id:"orders",  label:"🛒 Orders" },
   ];
 
   return (
@@ -519,7 +520,166 @@ export default function Admin() {
         {tab==="parts"  && <PartsTab token={token} categories={categories} />}
         {tab==="add"    && <AddPartTab token={token} categories={categories} brands={brands} />}
         {tab==="models" && <ModelsTab token={token} brands={brands} />}
+        {tab==="orders" && <OrdersTab token={token} />}
       </div>
+    </div>
+  );
+}
+
+// ── Orders Tab (append to existing Admin.jsx) ─────────────────────────────────
+export function OrdersTab({ token }) {
+  const headers = { "x-admin-token": token };
+  const [orders, setOrders]   = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [msg, setMsg] = useState("");
+
+  const statuses = ["pending","paid","processing","shipped","complete","cancelled"];
+  const statusColors = {
+    pending:"#fbbf24", paid:"#60a5fa", processing:"#a78bfa",
+    shipped:"#34d399", complete:"#10b981", cancelled:"#f87171"
+  };
+
+  const load = () => {
+    const params = statusFilter ? `?status=${statusFilter}` : '';
+    fetch(`/api/admin/orders${params}`, { headers })
+      .then(r=>r.json()).then(setOrders);
+  };
+
+  useEffect(() => { load(); }, [statusFilter]);
+
+  const loadDetail = (id) => {
+    fetch(`/api/admin/orders/${id}`, { headers })
+      .then(r=>r.json()).then(setSelected);
+  };
+
+  const updateStatus = async (id, status) => {
+    await fetch(`/api/admin/orders/${id}`, {
+      method:"PATCH", headers:{...headers,"Content-Type":"application/json"},
+      body: JSON.stringify({ status })
+    });
+    setMsg("✓ Status updated");
+    setTimeout(()=>setMsg(""),2000);
+    load();
+    if (selected?.id === id) setSelected(s => ({...s, status}));
+  };
+
+  return (
+    <div style={{ display:"grid", gridTemplateColumns: selected?"1fr 380px":"1fr", gap:20 }}>
+      {/* Orders list */}
+      <div>
+        <div style={{ display:"flex", gap:12, marginBottom:16, alignItems:"center", flexWrap:"wrap" }}>
+          <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}
+            style={{ padding:"8px 12px", borderRadius:7, border:"1px solid #334155",
+              background:"#0f172a", color:"#f1f5f9", fontSize:13, outline:"none" }}>
+            <option value="">All statuses</option>
+            {statuses.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+          {msg && <span style={{color:"#34d399",fontSize:13,fontWeight:600}}>{msg}</span>}
+        </div>
+
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+          <thead>
+            <tr style={{ borderBottom:"1px solid #334155" }}>
+              {["Reference","Customer","Total","Status","Date",""].map(h=>(
+                <th key={h} style={{ padding:"10px 12px", textAlign:"left", color:"#64748b",
+                  fontSize:11, textTransform:"uppercase", letterSpacing:1, fontWeight:600 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {orders.map(o=>(
+              <tr key={o.id} style={{ borderBottom:"1px solid #1e293b",
+                background: selected?.id===o.id?"#1a2744":"transparent",
+                cursor:"pointer" }} onClick={()=>loadDetail(o.id)}>
+                <td style={{ padding:"10px 12px", color:"#60a5fa", fontFamily:"monospace", fontSize:12 }}>{o.reference}</td>
+                <td style={{ padding:"10px 12px" }}>
+                  <div style={{color:"#f1f5f9",fontWeight:600}}>{o.name}</div>
+                  <div style={{color:"#64748b",fontSize:11}}>{o.email}</div>
+                </td>
+                <td style={{ padding:"10px 12px", color:"#34d399", fontWeight:700 }}>€{Number(o.total).toFixed(2)}</td>
+                <td style={{ padding:"10px 12px" }}>
+                  <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, fontWeight:600,
+                    background:"#1e293b", color: statusColors[o.status]||"#94a3b8" }}>
+                    {o.status}
+                  </span>
+                </td>
+                <td style={{ padding:"10px 12px", color:"#64748b", fontSize:11 }}>{o.created_at?.slice(0,16)}</td>
+                <td style={{ padding:"10px 12px" }}>
+                  <select value={o.status}
+                    onClick={e=>e.stopPropagation()}
+                    onChange={e=>updateStatus(o.id, e.target.value)}
+                    style={{ padding:"4px 8px", borderRadius:6, border:"1px solid #334155",
+                      background:"#0f172a", color:"#f1f5f9", fontSize:11, outline:"none" }}>
+                    {statuses.map(s=><option key={s} value={s}>{s}</option>)}
+                  </select>
+                </td>
+              </tr>
+            ))}
+            {orders.length===0 && (
+              <tr><td colSpan={6} style={{padding:24,color:"#475569",textAlign:"center"}}>No orders found</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Order detail panel */}
+      {selected && (
+        <div style={{ background:"#0f172a", borderRadius:12, border:"1px solid #1e293b", padding:20 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
+            <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:15, fontWeight:700,
+              color:"#f1f5f9", letterSpacing:1, textTransform:"uppercase" }}>Order Detail</div>
+            <button onClick={()=>setSelected(null)} style={{ background:"none", border:"none",
+              color:"#64748b", cursor:"pointer", fontSize:18 }}>×</button>
+          </div>
+
+          <div style={{ background:"#1e293b", borderRadius:8, padding:"10px 14px", marginBottom:16 }}>
+            <div style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:1 }}>Reference</div>
+            <div style={{ color:"#60a5fa", fontFamily:"monospace", fontWeight:700, marginTop:2 }}>{selected.reference}</div>
+          </div>
+
+          <div style={{ fontSize:13, color:"#94a3b8", lineHeight:2, marginBottom:16 }}>
+            <div><span style={{color:"#64748b"}}>Name:</span> {selected.name}</div>
+            <div><span style={{color:"#64748b"}}>Email:</span> {selected.email}</div>
+            <div><span style={{color:"#64748b"}}>Phone:</span> {selected.phone}</div>
+            <div><span style={{color:"#64748b"}}>Address:</span> {selected.address}, {selected.city} {selected.postcode}, {selected.country}</div>
+            {selected.notes && <div><span style={{color:"#64748b"}}>Notes:</span> {selected.notes}</div>}
+          </div>
+
+          <div style={{ borderTop:"1px solid #1e293b", paddingTop:16, marginBottom:16 }}>
+            {(selected.items||[]).map((item,i)=>(
+              <div key={i} style={{ display:"flex", justifyContent:"space-between",
+                padding:"6px 0", borderBottom:"1px solid #1e293b", fontSize:12 }}>
+                <div>
+                  <div style={{color:"#f1f5f9",fontWeight:600}}>{item.name}</div>
+                  <div style={{color:"#64748b"}}>{item.part_number} · Qty: {item.qty}</div>
+                </div>
+                <div style={{color:"#34d399",fontWeight:700}}>€{(item.price*item.qty).toFixed(2)}</div>
+              </div>
+            ))}
+            <div style={{ display:"flex", justifyContent:"space-between", marginTop:12,
+              fontSize:16, fontWeight:800, color:"#f1f5f9" }}>
+              <span>Total</span>
+              <span style={{color:"#34d399"}}>€{Number(selected.total).toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div style={{ fontSize:11, color:"#64748b", textTransform:"uppercase",
+            letterSpacing:1, marginBottom:8 }}>Update Status</div>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+            {statuses.map(s=>(
+              <button key={s} onClick={()=>updateStatus(selected.id,s)}
+                style={{ padding:"5px 12px", borderRadius:20, border:"none", cursor:"pointer",
+                  fontSize:11, fontWeight:600,
+                  background: selected.status===s?"#1e3a5f":"#1e293b",
+                  color: selected.status===s?(statusColors[s]||"#fff"):"#64748b",
+                  outline: selected.status===s?`1px solid ${statusColors[s]||"#334155"}`:"none" }}>
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

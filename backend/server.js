@@ -3,6 +3,7 @@ const cors = require('cors');
 const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
+const nodemailer = require('nodemailer');
 
 const app = express();
 app.use(cors());
@@ -12,16 +13,56 @@ app.use(express.static(path.join(__dirname, '../frontend/dist')));
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'bmw_parts.db');
 
+// Email config (set via env vars)
+const mailer = nodemailer.createTransport({
+  host:   process.env.SMTP_HOST   || 'smtp.gmail.com',
+  port:   parseInt(process.env.SMTP_PORT || '587'),
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+  },
+});
+
 let db;
-let sqlJs;
 
 async function loadDb() {
-  sqlJs = await initSqlJs();
+  const SQL = await initSqlJs();
   if (!fs.existsSync(DB_PATH)) {
     console.log('No database found — seeding...');
-    await require('./seed').run(sqlJs);
+    await require('./seed').run(SQL);
   }
-  db = new sqlJs.Database(fs.readFileSync(DB_PATH));
+  db = new SQL.Database(fs.readFileSync(DB_PATH));
+
+  // Create orders tables if they don't exist
+  db.run(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id          INTEGER PRIMARY KEY,
+      reference   TEXT UNIQUE,
+      name        TEXT,
+      email       TEXT,
+      phone       TEXT,
+      address     TEXT,
+      city        TEXT,
+      postcode    TEXT,
+      country     TEXT,
+      notes       TEXT,
+      total       REAL,
+      status      TEXT DEFAULT 'pending',
+      paypal_id   TEXT,
+      created_at  TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS order_items (
+      id          INTEGER PRIMARY KEY,
+      order_id    INTEGER REFERENCES orders(id),
+      part_number TEXT,
+      name        TEXT,
+      brand       TEXT,
+      price       REAL,
+      qty         INTEGER
+    );
+  `);
+  saveDb();
   console.log('Database loaded OK');
 }
 
@@ -43,7 +84,6 @@ function run(sql, params = []) {
   saveDb();
 }
 
-// ── Auth middleware ───────────────────────────────────────────────────────────
 function adminAuth(req, res, next) {
   const token = req.headers['x-admin-token'];
   if (token !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Unauthorised' });
@@ -116,20 +156,79 @@ app.get('/api/search', (req, res) => {
   `, [like, like, like, like, like, like, parseInt(limit)]));
 });
 
-// ── Admin: Auth check ─────────────────────────────────────────────────────────
+// ── Orders ────────────────────────────────────────────────────────────────────
+function generateRef() {
+  return 'ORD-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2,6).toUpperCase();
+}
+
+app.post('/api/orders', async (req, res) => {
+  const { customer, items, paypal_id } = req.body;
+  if (!items || !items.length) return res.status(400).json({ error: 'No items' });
+
+  const total = items.reduce((s, i) => s + i.price * i.qty, 0);
+  const ref   = generateRef();
+  const maxId = query('SELECT MAX(id) as m FROM orders')[0].m || 0;
+  const orderId = maxId + 1;
+
+  run(`INSERT INTO orders VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`, [
+    orderId, ref,
+    customer.name, customer.email, customer.phone,
+    customer.address, customer.city, customer.postcode, customer.country,
+    customer.notes || '',
+    Math.round(total * 100) / 100,
+    'paid', paypal_id || ''
+  ]);
+
+  let itemId = query('SELECT MAX(id) as m FROM order_items')[0].m || 0;
+  items.forEach(item => {
+    run('INSERT INTO order_items VALUES (?,?,?,?,?,?,?)',
+      [++itemId, orderId, item.part_number, item.name, item.brand, item.price, item.qty]);
+  });
+
+  // Send confirmation email
+  if (customer.email && process.env.SMTP_USER) {
+    const itemRows = items.map(i =>
+      `<tr><td>${i.name}</td><td>${i.part_number}</td><td>${i.qty}</td><td>€${(i.price*i.qty).toFixed(2)}</td></tr>`
+    ).join('');
+    try {
+      await mailer.sendMail({
+        from: `PartsFinder <${process.env.SMTP_USER}>`,
+        to: customer.email,
+        subject: `Order Confirmed — ${ref}`,
+        html: `
+          <h2>Thank you, ${customer.name}!</h2>
+          <p>Your order <strong>${ref}</strong> has been received and payment confirmed.</p>
+          <table border="1" cellpadding="6" cellspacing="0">
+            <thead><tr><th>Part</th><th>Part No.</th><th>Qty</th><th>Price</th></tr></thead>
+            <tbody>${itemRows}</tbody>
+          </table>
+          <p><strong>Total: €${total.toFixed(2)}</strong></p>
+          <h3>Shipping to:</h3>
+          <p>${customer.name}<br>${customer.address}<br>${customer.city} ${customer.postcode}<br>${customer.country}</p>
+          <p>We will be in touch shortly with shipping details.</p>
+        `,
+      });
+    } catch (e) {
+      console.error('Email error:', e.message);
+    }
+  }
+
+  res.json({ ok: true, reference: ref, orderId });
+});
+
+// ── Admin Auth ────────────────────────────────────────────────────────────────
 app.post('/api/admin/login', (req, res) => {
   const { password } = req.body;
   if (password === ADMIN_PASSWORD) return res.json({ ok: true });
   res.status(401).json({ error: 'Wrong password' });
 });
 
-// ── Admin: Parts ──────────────────────────────────────────────────────────────
+// ── Admin Parts ───────────────────────────────────────────────────────────────
 app.get('/api/admin/parts', adminAuth, (req, res) => {
   const { search, category, page = 1, limit = 30 } = req.query;
   let sql = `
     SELECT p.id, p.name, p.part_number, p.price, p.stock, p.brand, p.notes,
-           c.name AS category, b.name AS car_brand, m.name AS car_model,
-           v.name AS variant
+           c.name AS category, b.name AS car_brand, m.name AS car_model, v.name AS variant
     FROM parts p
     JOIN categories c ON c.id = p.category_id
     JOIN variants v ON v.id = p.variant_id
@@ -141,15 +240,13 @@ app.get('/api/admin/parts', adminAuth, (req, res) => {
   const params = [];
   if (search) { sql += ' AND (p.name LIKE ? OR p.part_number LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
   if (category) { sql += ' AND c.name = ?'; params.push(category); }
-  sql += ' ORDER BY b.name, m.name, c.name, p.name';
-  sql += ` LIMIT ${parseInt(limit)} OFFSET ${(parseInt(page)-1)*parseInt(limit)}`;
+  sql += ` ORDER BY b.name, m.name, c.name, p.name LIMIT ${parseInt(limit)} OFFSET ${(parseInt(page)-1)*parseInt(limit)}`;
   res.json(query(sql, params));
 });
 
 app.patch('/api/admin/parts/:id', adminAuth, (req, res) => {
   const { price, stock, notes } = req.body;
-  run('UPDATE parts SET price=?, stock=?, notes=? WHERE id=?',
-    [price, stock, notes, req.params.id]);
+  run('UPDATE parts SET price=?, stock=?, notes=? WHERE id=?', [price, stock, notes, req.params.id]);
   res.json({ ok: true });
 });
 
@@ -166,7 +263,7 @@ app.post('/api/admin/parts', adminAuth, (req, res) => {
   res.json({ ok: true, id: maxId+1 });
 });
 
-// ── Admin: Models & Variants ──────────────────────────────────────────────────
+// ── Admin Models ──────────────────────────────────────────────────────────────
 app.get('/api/admin/models', adminAuth, (req, res) => {
   res.json(query(`
     SELECT m.id, m.name, b.name AS brand, COUNT(DISTINCT v.id) AS variant_count
@@ -181,24 +278,42 @@ app.post('/api/admin/models', adminAuth, (req, res) => {
   const { brand_id, name } = req.body;
   const maxId = query('SELECT MAX(id) as m FROM models')[0].m || 0;
   run('INSERT INTO models VALUES (?,?,?)', [maxId+1, brand_id, name]);
-  // Add years 2018–2025
   let yMaxId = query('SELECT MAX(id) as m FROM years')[0].m || 0;
-  for (let y = 2018; y <= 2025; y++) {
-    run('INSERT INTO years VALUES (?,?,?)', [++yMaxId, maxId+1, y]);
-  }
+  for (let y = 2018; y <= 2025; y++) run('INSERT INTO years VALUES (?,?,?)', [++yMaxId, maxId+1, y]);
   res.json({ ok: true, id: maxId+1 });
 });
 
 app.post('/api/admin/variants', adminAuth, (req, res) => {
   const { model_id, name, engine } = req.body;
-  // Insert variant for all years of this model
   const years = query('SELECT id FROM years WHERE model_id = ?', [model_id]);
   const maxId = query('SELECT MAX(id) as m FROM variants')[0].m || 0;
   let vid = maxId;
-  years.forEach(y => {
-    run('INSERT INTO variants VALUES (?,?,?,?)', [++vid, y.id, name, engine]);
-  });
+  years.forEach(y => run('INSERT INTO variants VALUES (?,?,?,?)', [++vid, y.id, name, engine]));
   res.json({ ok: true, count: years.length });
+});
+
+// ── Admin Orders ──────────────────────────────────────────────────────────────
+app.get('/api/admin/orders', adminAuth, (req, res) => {
+  const { status, page = 1, limit = 20 } = req.query;
+  let sql = 'SELECT * FROM orders WHERE 1=1';
+  const params = [];
+  if (status) { sql += ' AND status = ?'; params.push(status); }
+  sql += ` ORDER BY created_at DESC LIMIT ${parseInt(limit)} OFFSET ${(parseInt(page)-1)*parseInt(limit)}`;
+  const orders = query(sql, params);
+  res.json(orders);
+});
+
+app.get('/api/admin/orders/:id', adminAuth, (req, res) => {
+  const order = query('SELECT * FROM orders WHERE id = ?', [req.params.id])[0];
+  if (!order) return res.status(404).json({ error: 'Not found' });
+  const items = query('SELECT * FROM order_items WHERE order_id = ?', [req.params.id]);
+  res.json({ ...order, items });
+});
+
+app.patch('/api/admin/orders/:id', adminAuth, (req, res) => {
+  const { status } = req.body;
+  run('UPDATE orders SET status = ? WHERE id = ?', [status, req.params.id]);
+  res.json({ ok: true });
 });
 
 // Catch-all

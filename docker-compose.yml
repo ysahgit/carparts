@@ -1,7 +1,10 @@
 services:
 
   app:
-    build: .
+    build:
+      context: .
+      args:
+        - VITE_PAYPAL_CLIENT_ID=${VITE_PAYPAL_CLIENT_ID}
     container_name: carparts_app
     expose:
       - "3001"
@@ -10,8 +13,12 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
-      - ADMIN_PASSWORD=admin123
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       - DB_PATH=/app/data/parts.db
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
     restart: unless-stopped
     networks:
       - carparts_net
@@ -20,9 +27,9 @@ services:
     image: jc21/nginx-proxy-manager:latest
     container_name: carparts_npm
     ports:
-      - "8080:80"     # HTTP + Let's Encrypt verification
-      - "8443:443"    # HTTPS
-      - "81:81"       # NPM admin UI
+      - "8080:80"
+      - "8443:443"
+      - "81:81"
     volumes:
       - /srv/dev-disk-by-uuid-be0483c1-b5c5-4e3f-a0f9-6253efe0bf1b/docker/appdata/carparts/npm/data:/data
       - /srv/dev-disk-by-uuid-be0483c1-b5c5-4e3f-a0f9-6253efe0bf1b/docker/appdata/carparts/npm/letsencrypt:/etc/letsencrypt

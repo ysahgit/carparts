@@ -1,6 +1,9 @@
 # ── Stage 1: Build frontend ───────────────────────────────────────────────────
 FROM node:20-alpine AS frontend-build
 
+ARG VITE_PAYPAL_CLIENT_ID
+ENV VITE_PAYPAL_CLIENT_ID=$VITE_PAYPAL_CLIENT_ID
+
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm install
@@ -10,7 +13,6 @@ RUN npm run build
 # ── Stage 2: Run backend ──────────────────────────────────────────────────────
 FROM node:20-alpine
 
-# Install su-exec to handle PUID/PGID switching
 RUN apk add --no-cache su-exec
 
 WORKDIR /app/backend
@@ -20,10 +22,8 @@ RUN npm install --omit=dev
 COPY backend/ ./
 COPY --from=frontend-build /app/frontend/dist ../frontend/dist
 
-# Create data directory
 RUN mkdir -p /app/data
 
-# Entrypoint script to apply PUID/PGID at runtime
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

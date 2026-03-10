@@ -168,7 +168,7 @@ const Select = ({ label, value, onChange, options, placeholder, disabled }) => (
 );
 
 // ── Cart ──────────────────────────────────────────────────────────────────────
-const Cart = ({ items, onRemove }) => {
+const Cart = ({ items, onRemove, onCheckout }) => {
   const total = items.reduce((s,i)=>s+i.price*i.qty,0);
   if (!items.length) return null;
   return (
@@ -190,8 +190,14 @@ const Cart = ({ items, onRemove }) => {
           </div>
         </div>
       ))}
-      <div style={{ marginTop:14, textAlign:"right", fontSize:18, fontWeight:800, color:"#f1f5f9" }}>
-        Total: <span style={{ color:"#34d399" }}>€{total.toFixed(2)}</span>
+      <div style={{ marginTop:16, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={{ fontSize:18, fontWeight:800, color:"#f1f5f9" }}>
+          Total: <span style={{ color:"#34d399" }}>€{total.toFixed(2)}</span>
+        </div>
+        <button onClick={onCheckout} style={{ padding:"10px 28px", borderRadius:8, border:"none",
+          background:"#2563eb", color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer" }}>
+          Checkout →
+        </button>
       </div>
     </div>
   );
@@ -455,7 +461,11 @@ export default function App() {
           </div>
         )}
 
-        <Cart items={cart} onRemove={i=>setCart(c=>c.filter((_,j)=>j!==i))} />
+        <Cart items={cart} onRemove={i=>setCart(c=>c.filter((_,j)=>j!==i))}
+          onCheckout={() => {
+            sessionStorage.setItem('checkout_cart', JSON.stringify(cart));
+            window.location.href = '/checkout';
+          }} />
       </div>
     </div>
   );
