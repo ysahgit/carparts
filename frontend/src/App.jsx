@@ -339,8 +339,12 @@ export default function App() {
         </div>
         <div style={{ flex:1, minWidth:240 }}><SearchBar accentColor={accentColor} /></div>
         {cart.length>0 && (
-          <div style={{ flexShrink:0, background:"#1e293b", border:"1px solid #334155",
-            borderRadius:10, padding:"8px 16px", display:"flex", alignItems:"center", gap:8 }}>
+          <div onClick={() => document.getElementById('cart-section')?.scrollIntoView({ behavior:'smooth' })}
+            style={{ flexShrink:0, background:"#1e293b", border:"1px solid #334155",
+            borderRadius:10, padding:"8px 16px", display:"flex", alignItems:"center", gap:8,
+            cursor:"pointer" }}
+            onMouseEnter={e=>e.currentTarget.style.borderColor=accentColor}
+            onMouseLeave={e=>e.currentTarget.style.borderColor="#334155"}>
             <span>🛒</span>
             <span style={{ color:"#f1f5f9", fontWeight:700, fontSize:13 }}>{cart.length}</span>
             <span style={{ color:"#34d399", fontWeight:700, fontSize:13 }}>
@@ -461,11 +465,13 @@ export default function App() {
           </div>
         )}
 
+        <div id="cart-section">
         <Cart items={cart} onRemove={i=>setCart(c=>c.filter((_,j)=>j!==i))}
           onCheckout={() => {
             sessionStorage.setItem('checkout_cart', JSON.stringify(cart));
             window.location.href = '/checkout';
           }} />
+        </div>
       </div>
     </div>
   );
