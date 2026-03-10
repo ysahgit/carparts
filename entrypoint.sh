@@ -1,16 +1,22 @@
 #!/bin/sh
 
 PUID=${PUID:-1000}
-PGID=${PGID:-100}
+PGID=${PGID:-1000}
 
 echo "Starting with PUID=$PUID and PGID=$PGID"
 
-# Create group and user with specified IDs if they don't exist
-addgroup -g "$PGID" appgroup 2>/dev/null || true
-adduser -D -u "$PUID" -G appgroup appuser 2>/dev/null || true
+# Create group if it doesn't exist
+if ! getent group "$PGID" > /dev/null 2>&1; then
+  addgroup -g "$PGID" appgroup
+fi
+
+# Create user if it doesn't exist
+if ! getent passwd "$PUID" > /dev/null 2>&1; then
+  adduser -D -u "$PUID" -G "$(getent group $PGID | cut -d: -f1)" appuser
+fi
 
 # Fix ownership of data directory
-chown -R appuser:appgroup /app/data
+chown -R "$PUID:$PGID" /app/data
 
-# Run the app as the specified user
-exec su-exec appuser "$@"
+# Run as the specified UID/GID directly
+exec su-exec "$PUID:$PGID" "$@"
