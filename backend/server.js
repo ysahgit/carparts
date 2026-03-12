@@ -217,10 +217,13 @@ if (process.env.SMTP_USER) {
   }
 
   // Email to admin
+  // Email to admin
   try {
+    const adminTo = process.env.ADMIN_EMAIL || process.env.SMTP_USER;
+    console.log('Sending admin email to:', adminTo);
     await mailer.sendMail({
       from: `PartsFinder <${process.env.SMTP_USER}>`,
-      to: process.env.ADMIN_EMAIL || process.env.SMTP_USER,
+      to: adminTo,
       subject: `🛒 New Order — ${ref} — €${total.toFixed(2)}`,
       html: `
         <h2>New Order Received</h2>
@@ -237,11 +240,10 @@ if (process.env.SMTP_USER) {
         <p><a href="https://www.yyaass.site/admin">View in Admin Panel →</a></p>
       `,
     });
+  console.log('Admin email sent OK');
   } catch (e) {
     console.error('Admin email error:', e.message);
   }
-}
-
 
 // ── Admin Auth ────────────────────────────────────────────────────────────────
 app.post('/api/admin/login', (req, res) => {
