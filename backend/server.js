@@ -185,11 +185,14 @@ app.post('/api/orders', async (req, res) => {
       [++itemId, orderId, item.part_number, item.name, item.brand, item.price, item.qty]);
   });
 
-  // Send confirmation email
-  if (customer.email && process.env.SMTP_USER) {
-    const itemRows = items.map(i =>
-      `<tr><td>${i.name}</td><td>${i.part_number}</td><td>${i.qty}</td><td>€${(i.price*i.qty).toFixed(2)}</td></tr>`
-    ).join('');
+// Send emails
+if (process.env.SMTP_USER) {
+  const itemRows = items.map(i =>
+    `<tr><td>${i.name}</td><td>${i.part_number}</td><td>${i.qty}</td><td>€${(i.price*i.qty).toFixed(2)}</td></tr>`
+  ).join('');
+
+  // Email to customer
+  if (customer.email) {
     try {
       await mailer.sendMail({
         from: `PartsFinder <${process.env.SMTP_USER}>`,
@@ -197,7 +200,7 @@ app.post('/api/orders', async (req, res) => {
         subject: `Order Confirmed — ${ref}`,
         html: `
           <h2>Thank you, ${customer.name}!</h2>
-          <p>Your order <strong>${ref}</strong> has been received and payment confirmed.</p>
+          <p>Your order <strong>${ref}</strong> has been received.</p>
           <table border="1" cellpadding="6" cellspacing="0">
             <thead><tr><th>Part</th><th>Part No.</th><th>Qty</th><th>Price</th></tr></thead>
             <tbody>${itemRows}</tbody>
@@ -209,12 +212,36 @@ app.post('/api/orders', async (req, res) => {
         `,
       });
     } catch (e) {
-      console.error('Email error:', e.message);
+      console.error('Customer email error:', e.message);
     }
   }
 
-  res.json({ ok: true, reference: ref, orderId });
-});
+  // Email to admin
+  try {
+    await mailer.sendMail({
+      from: `PartsFinder <${process.env.SMTP_USER}>`,
+      to: process.env.ADMIN_EMAIL || process.env.SMTP_USER,
+      subject: `🛒 New Order — ${ref} — €${total.toFixed(2)}`,
+      html: `
+        <h2>New Order Received</h2>
+        <p><strong>Reference:</strong> ${ref}</p>
+        <p><strong>Customer:</strong> ${customer.name} (${customer.email})</p>
+        <p><strong>Phone:</strong> ${customer.phone}</p>
+        <p><strong>Address:</strong> ${customer.address}, ${customer.city} ${customer.postcode}, ${customer.country}</p>
+        ${customer.notes ? `<p><strong>Notes:</strong> ${customer.notes}</p>` : ''}
+        <table border="1" cellpadding="6" cellspacing="0">
+          <thead><tr><th>Part</th><th>Part No.</th><th>Qty</th><th>Price</th></tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+        <p><strong>Total: €${total.toFixed(2)}</strong></p>
+        <p><a href="https://www.yyaass.site/admin">View in Admin Panel →</a></p>
+      `,
+    });
+  } catch (e) {
+    console.error('Admin email error:', e.message);
+  }
+}
+
 
 // ── Admin Auth ────────────────────────────────────────────────────────────────
 app.post('/api/admin/login', (req, res) => {
