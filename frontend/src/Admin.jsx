@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import * as XLSX from "https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs";
 
 const API = "/api/admin";
 
@@ -93,6 +94,50 @@ const Btn = ({ children, onClick, variant="primary", disabled=false, small=false
 };
 
 // ── Parts Tab ─────────────────────────────────────────────────────────────────
+async function exportToExcel(token) {
+  const headers = { "x-admin-token": token };
+  let allParts = [], page = 1;
+  while (true) {
+    const data = await fetch(`${API}/parts?page=${page}&limit=500`, { headers }).then(r=>r.json());
+    allParts = [...allParts, ...data];
+    if (data.length < 500) break;
+    page++;
+  }
+  const rows = allParts.map(p => ({
+    ID: p.id, "Part Name": p.name, "Part No.": p.part_number,
+    Category: p.category, "Car Brand": p.car_brand, Model: p.car_model,
+    Variant: p.variant, "Price (€)": Number(p.price), Stock: p.stock,
+    Supplier: p.brand, Notes: p.notes || "",
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws["!cols"] = [{wch:6},{wch:30},{wch:18},{wch:14},{wch:12},{wch:14},{wch:16},{wch:10},{wch:8},{wch:16},{wch:24}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Parts");
+  XLSX.writeFile(wb, `parts-export-${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+async function importFromExcel(file, token, onProgress, onDone) {
+  const headers = { "x-admin-token": token };
+  const data = await file.arrayBuffer();
+  const wb = XLSX.read(data);
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+  let updated = 0, errors = 0;
+  for (const row of rows) {
+    const id = row["ID"];
+    if (!id) { errors++; continue; }
+    try {
+      const res = await fetch(`${API}/parts/${id}`, {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ price: parseFloat(row["Price (€)"]), stock: parseInt(row["Stock"]), notes: row["Notes"] || "" }),
+      });
+      if (res.ok) updated++; else errors++;
+    } catch { errors++; }
+    onProgress(updated + errors, rows.length);
+  }
+  onDone(updated, errors);
+}
+
 function PartsTab({ token, categories }) {
   const [parts, setParts]       = useState([]);
   const [search, setSearch]     = useState("");
@@ -101,6 +146,8 @@ function PartsTab({ token, categories }) {
   const [editing, setEditing]   = useState({});
   const [saving, setSaving]     = useState(null);
   const [msg, setMsg]           = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(null);
 
   const headers = { "x-admin-token": token };
 
@@ -136,6 +183,26 @@ function PartsTab({ token, categories }) {
     setMsg("✓ Deleted"); setTimeout(()=>setMsg(""),2000);
     load();
   };
+
+  const handleExport = async () => {
+    setMsg("Exporting...");
+    await exportToExcel(token);
+    setMsg("✓ Exported!"); setTimeout(()=>setMsg(""),3000);
+  };
+
+  const handleImport = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    setImporting(true); setImportProgress({ done:0, total:0 });
+    await importFromExcel(file, token,
+      (done, total) => setImportProgress({ done, total }),
+      (updated, errors) => {
+        setImporting(false); setImportProgress(null);
+        setMsg(`✓ Import done: ${updated} updated, ${errors} errors`);
+        setTimeout(()=>setMsg(""),5000); load();
+        }
+      );
+      e.target.value = "";
+    };
 
   return (
     <div>
@@ -317,6 +384,18 @@ function AddPartTab({ token, categories, brands }) {
           options={[{value:"",label:"Select variant..."},...variants.map(v=>({value:v.id,label:`${v.name} — ${v.engine}`}))]} />
         <Sel label="Category *" value={catId} onChange={setCatId}
           options={[{value:"",label:"Select category..."},...categories.map(c=>({value:c.id,label:`${categoryIcons[c.name]||""} ${c.name}`}))]} />
+        <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+          <label style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:1, fontWeight:600 }}>Excel</label>
+          <div style={{ display:"flex", gap:8 }}>
+            <Btn variant="success" small onClick={handleExport}>⬇ Export</Btn>
+            <label style={{ padding:"5px 12px", borderRadius:7, background:"#d97706", color:"#fff",
+              fontWeight:600, fontSize:12, cursor:"pointer" }}>
+              ⬆ Import
+              <input type="file" accept=".xlsx" onChange={handleImport} style={{ display:"none" }} />
+            </label>
+          </div>
+        </div>
+        {importProgress && <div style={{ fontSize:13, color:"#60a5fa" }}>Importing... {importProgress.done}/{importProgress.total}</div>}
         <Input label="Supplier Brand *" value={brand} onChange={setBrand} />
       </div>
 
