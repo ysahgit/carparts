@@ -186,64 +186,68 @@ app.post('/api/orders', async (req, res) => {
   });
 
 // Send emails
-if (process.env.SMTP_USER) {
-  const itemRows = items.map(i =>
-    `<tr><td>${i.name}</td><td>${i.part_number}</td><td>${i.qty}</td><td>€${(i.price*i.qty).toFixed(2)}</td></tr>`
-  ).join('');
+  if (process.env.SMTP_USER) {
+    const itemRows = items.map(i =>
+      `<tr><td>${i.name}</td><td>${i.part_number}</td><td>${i.qty}</td><td>€${(i.price*i.qty).toFixed(2)}</td></tr>`
+    ).join('');
 
-  // Email to customer
-  if (customer.email) {
+    // Email to customer
+    if (customer.email) {
+      try {
+        await mailer.sendMail({
+          from: `PartsFinder <${process.env.SMTP_USER}>`,
+          to: customer.email,
+          subject: `Order Confirmed — ${ref}`,
+          html: `
+            <h2>Thank you, ${customer.name}!</h2>
+            <p>Your order <strong>${ref}</strong> has been received.</p>
+            <table border="1" cellpadding="6" cellspacing="0">
+              <thead><tr><th>Part</th><th>Part No.</th><th>Qty</th><th>Price</th></tr></thead>
+              <tbody>${itemRows}</tbody>
+            </table>
+            <p><strong>Total: €${total.toFixed(2)}</strong></p>
+            <h3>Shipping to:</h3>
+            <p>${customer.name}<br>${customer.address}<br>${customer.city} ${customer.postcode}<br>${customer.country}</p>
+            <p>We will be in touch shortly with shipping details.</p>
+          `,
+        });
+        console.log('Customer email sent to:', customer.email);
+      } catch (e) {
+        console.error('Customer email error:', e.message);
+      }
+    }
+
+    // Email to admin
     try {
+      const adminTo = process.env.ADMIN_EMAIL || process.env.SMTP_USER;
+      console.log('Sending admin email to:', adminTo);
       await mailer.sendMail({
         from: `PartsFinder <${process.env.SMTP_USER}>`,
-        to: customer.email,
-        subject: `Order Confirmed — ${ref}`,
+        to: adminTo,
+        subject: `New Order — ${ref} — €${total.toFixed(2)}`,
         html: `
-          <h2>Thank you, ${customer.name}!</h2>
-          <p>Your order <strong>${ref}</strong> has been received.</p>
+          <h2>New Order Received</h2>
+          <p><strong>Reference:</strong> ${ref}</p>
+          <p><strong>Customer:</strong> ${customer.name} (${customer.email})</p>
+          <p><strong>Phone:</strong> ${customer.phone}</p>
+          <p><strong>Address:</strong> ${customer.address}, ${customer.city} ${customer.postcode}, ${customer.country}</p>
+          ${customer.notes ? `<p><strong>Notes:</strong> ${customer.notes}</p>` : ''}
           <table border="1" cellpadding="6" cellspacing="0">
             <thead><tr><th>Part</th><th>Part No.</th><th>Qty</th><th>Price</th></tr></thead>
             <tbody>${itemRows}</tbody>
           </table>
           <p><strong>Total: €${total.toFixed(2)}</strong></p>
-          <h3>Shipping to:</h3>
-          <p>${customer.name}<br>${customer.address}<br>${customer.city} ${customer.postcode}<br>${customer.country}</p>
-          <p>We will be in touch shortly with shipping details.</p>
+          <p><a href="https://www.yyaass.site/admin">View in Admin Panel</a></p>
         `,
       });
+      console.log('Admin email sent OK to:', adminTo);
     } catch (e) {
-      console.error('Customer email error:', e.message);
+      console.error('Admin email error:', e.message);
     }
   }
 
-  // Email to admin
-  // Email to admin
-  try {
-    const adminTo = process.env.ADMIN_EMAIL || process.env.SMTP_USER;
-    console.log('Sending admin email to:', adminTo);
-    await mailer.sendMail({
-      from: `PartsFinder <${process.env.SMTP_USER}>`,
-      to: adminTo,
-      subject: `🛒 New Order — ${ref} — €${total.toFixed(2)}`,
-      html: `
-        <h2>New Order Received</h2>
-        <p><strong>Reference:</strong> ${ref}</p>
-        <p><strong>Customer:</strong> ${customer.name} (${customer.email})</p>
-        <p><strong>Phone:</strong> ${customer.phone}</p>
-        <p><strong>Address:</strong> ${customer.address}, ${customer.city} ${customer.postcode}, ${customer.country}</p>
-        ${customer.notes ? `<p><strong>Notes:</strong> ${customer.notes}</p>` : ''}
-        <table border="1" cellpadding="6" cellspacing="0">
-          <thead><tr><th>Part</th><th>Part No.</th><th>Qty</th><th>Price</th></tr></thead>
-          <tbody>${itemRows}</tbody>
-        </table>
-        <p><strong>Total: €${total.toFixed(2)}</strong></p>
-        <p><a href="https://www.yyaass.site/admin">View in Admin Panel →</a></p>
-      `,
-    });
-  console.log('Admin email sent OK');
-  } catch (e) {
-    console.error('Admin email error:', e.message);
-  }
+  res.json({ ok: true, reference: ref, orderId });
+});
 
 // ── Admin Auth ────────────────────────────────────────────────────────────────
 app.post('/api/admin/login', (req, res) => {
