@@ -213,7 +213,19 @@ function PartsTab({ token, categories }) {
         <Sel label="Category" value={catFilter} onChange={v=>{setCatFilter(v);setPage(1);}}
           style={{ flex:"0 0 180px" }}
           options={[{value:"",label:"All categories"},...categories.map(c=>({value:c.name,label:`${categoryIcons[c.name]||""} ${c.name}`}))]} />
-        {msg && <div style={{ color:"#34d399", fontSize:13, fontWeight:600 }}>{msg}</div>}
+        <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+          <label style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:1, fontWeight:600 }}>Excel</label>
+          <div style={{ display:"flex", gap:8 }}>
+            <Btn variant="success" small onClick={handleExport}>⬇ Export</Btn>
+            <label style={{ padding:"5px 12px", borderRadius:7, background: importing?"#1e293b":"#d97706",
+              color: importing?"#475569":"#fff", fontWeight:600, fontSize:12, cursor: importing?"not-allowed":"pointer" }}>
+              ⬆ Import
+              <input type="file" accept=".xlsx" onChange={handleImport} disabled={importing} style={{ display:"none" }} />
+            </label>
+          </div>
+        </div>
+        {importProgress && <div style={{ fontSize:13, color:"#60a5fa" }}>Importing... {importProgress.done}/{importProgress.total}</div>}
+        {msg && <div style={{ color: msg.startsWith("✓")?"#34d399":"#fbbf24", fontSize:13, fontWeight:600 }}>{msg}</div>}
       </div>
 
       {/* Table */}
@@ -384,18 +396,6 @@ function AddPartTab({ token, categories, brands }) {
           options={[{value:"",label:"Select variant..."},...variants.map(v=>({value:v.id,label:`${v.name} — ${v.engine}`}))]} />
         <Sel label="Category *" value={catId} onChange={setCatId}
           options={[{value:"",label:"Select category..."},...categories.map(c=>({value:c.id,label:`${categoryIcons[c.name]||""} ${c.name}`}))]} />
-        <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-          <label style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:1, fontWeight:600 }}>Excel</label>
-          <div style={{ display:"flex", gap:8 }}>
-            <Btn variant="success" small onClick={handleExport}>⬇ Export</Btn>
-            <label style={{ padding:"5px 12px", borderRadius:7, background:"#d97706", color:"#fff",
-              fontWeight:600, fontSize:12, cursor:"pointer" }}>
-              ⬆ Import
-              <input type="file" accept=".xlsx" onChange={handleImport} style={{ display:"none" }} />
-            </label>
-          </div>
-        </div>
-        {importProgress && <div style={{ fontSize:13, color:"#60a5fa" }}>Importing... {importProgress.done}/{importProgress.total}</div>}
         <Input label="Supplier Brand *" value={brand} onChange={setBrand} />
       </div>
 
